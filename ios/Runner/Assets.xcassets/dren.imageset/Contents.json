@@ -1,17 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "dren_logo.png",
+      "filename" : "logo_sin_fondo.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "dren_logo 1.png",
+      "filename" : "logo_sin_fondo 1.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
-      "filename" : "dren_logo 2.png",
+      "filename" : "logo_sin_fondo 2.png",
       "idiom" : "universal",
       "scale" : "3x"
     }

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/usuarioperfil.dart';
 
-
 class CustomDrawer extends StatelessWidget {
-  final Usuario usuario; // ✅ cambia dynamic por Usuario
+  final Usuario usuario;
   final BuildContext parentContext;
   final VoidCallback onLogout;
 
@@ -13,6 +12,19 @@ class CustomDrawer extends StatelessWidget {
     required this.parentContext,
     required this.onLogout,
   }) : super(key: key);
+
+  // Función para obtener URL completa del avatar del usuario
+  String getAvatarUrl(String? fileName) {
+    const baseUrl = 'https://iidlive.com/';
+    if (fileName == null || fileName.isEmpty) {
+      return '${baseUrl}plataforma/perfil/avatar.png'; // avatar por defecto
+    }
+    if (fileName.startsWith('uploads/avatars/')) {
+      return baseUrl + fileName;
+    }
+    return baseUrl + 'uploads/avatars/' + fileName;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -23,30 +35,26 @@ class CustomDrawer extends StatelessWidget {
           children: [
             UserAccountsDrawerHeader(
               decoration: const BoxDecoration(color: Color(0xFFC17C9C)),
-              accountName: Text(usuario.nombre ),
-              accountEmail: Text(usuario.email ),
+              accountName: Text(usuario.nombre),
+              accountEmail: Text(usuario.email),
               currentAccountPicture: GestureDetector(
                 onTap: () {
                   Navigator.pushNamed(parentContext, '/perfil');
                 },
                 child: CircleAvatar(
                   backgroundColor: Colors.white,
-                  backgroundImage:
-                      (usuario.fotos.isNotEmpty)
-                          ? NetworkImage(
-                              usuario.fotos.startsWith('http')
-                                  ? usuario.fotos
-                                  //: 'http://169.254.191.190:8080/${usuario.fotos}'
-                                   : 'http://192.168.50.153:8080/${usuario.fotos}',
-                            )
-                          : null,
+                  backgroundImage: (usuario.fotos.isNotEmpty)
+                      ? NetworkImage(getAvatarUrl(usuario.fotos))
+                      : null,
                   child: (usuario.fotos.isEmpty)
                       ? Text(
                           (usuario.nombre.isNotEmpty)
                               ? usuario.nombre[0].toUpperCase()
                               : 'N',
                           style: const TextStyle(
-                              fontSize: 40, color: Colors.black),
+                            fontSize: 40,
+                            color: Colors.black,
+                          ),
                         )
                       : null,
                 ),
@@ -57,6 +65,8 @@ class CustomDrawer extends StatelessWidget {
                 Icons.video_collection, 'Página de Reels', context, '/reels'),
             _buildDrawerItem(
                 Icons.post_add, 'Página de Post', context, '/post'),
+            _buildDrawerItem(Icons.follow_the_signs,'Segidores', context, '/followers'),
+            _buildDrawerItem(Icons.people, 'Seguidos', context, '/following'),
             _buildDrawerItem(
                 Icons.settings, 'Configuraciones', context, '/settings'),
             _buildDrawerItem(Icons.help, 'Ayuda', context, '/help'),

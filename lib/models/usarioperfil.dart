@@ -40,53 +40,58 @@
 class Usuario {
   final int? id;
   final String nombre;
-  final String nombreUsuario;
+  final String nombreusuario;
   final String email;
   final String direccion;
   final String ciudad;
   final String pais;
-  final String codigoPostal;
+  final int? codigopostal;
   final String descripcion;
   final String fotos;
-    
+
   Usuario({
     this.id,
     required this.nombre,
-    required this.nombreUsuario,
+    required this.nombreusuario,
     required this.email,
     required this.direccion,
     required this.ciudad,
     required this.pais,
-    required this.codigoPostal,
+    required this.codigopostal,
     required this.descripcion,
     required this.fotos,
   });
 
-  factory Usuario.fromJson(Map<String, dynamic> json) {
-    return Usuario(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id'].toString()),
-      nombre: json['nombre']?.toString() ?? '',
-      nombreUsuario: json['nombre_usuario']?.toString() ?? '',
-      email: json['email']?.toString() ?? '',
-      direccion: json['direccion']?.toString() ?? '',
-      ciudad: json['ciudad']?.toString() ?? '',
-      pais: json['pais']?.toString() ?? '',
-      codigoPostal: json['codigo_postal']?.toString() ?? '',
-      descripcion: json['descripcion']?.toString() ?? '',
-      fotos: json['fotos']?.toString() ?? '',
-    );
-  }
+factory Usuario.fromJson(Map<String, dynamic> json) {
+  final userData = json['user'] ?? json; // Si está anidado, toma ese, sino el mismo json
+
+  return Usuario(
+    id: userData['id'] is int ? userData['id'] : int.tryParse(userData['id'].toString()),
+    nombre: userData['nombre']?.toString() ?? '',
+    nombreusuario: userData['nombreusuario']?.toString() ?? '',
+    email: userData['email']?.toString() ?? '',
+    direccion: userData['direccion']?.toString() ?? '',
+    ciudad: userData['ciudad']?.toString() ?? '',
+    pais: userData['pais']?.toString() ?? '',
+    codigopostal: userData['codigo_postal'] != null
+    ? int.tryParse(userData['codigo_postal'].toString())
+    : null,
+    descripcion: userData['descripcion']?.toString() ?? '',
+    fotos: userData['fotos']?.toString() ?? '',
+  );
+}
+
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'nombre': nombre,
-      'nombre_usuario': nombreUsuario,
+      'nombreusuario': nombreusuario,
       'email': email,
       'direccion': direccion,
       'ciudad': ciudad,
       'pais': pais,
-      'codigo_postal': codigoPostal,
+      'codigo_postal': codigopostal,
       'descripcion': descripcion,
       'fotos': fotos,
     };

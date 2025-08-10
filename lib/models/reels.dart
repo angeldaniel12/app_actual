@@ -1,106 +1,71 @@
+import 'comments.dart';
 class Reel {
-  final String videoId;
-  final String videoName;
-  final String videoDescription;
-  final String videoUserId;
-  final DateTime videoCreatedAt;
-  final Map<String, int> reactions;
+  final int id;
+  final String nombre;
+  final String descripcion;
+  final DateTime createdAt;
   final String userName;
-  final String userAvatar;
-
+  final String? userAvatar;
+  int likes;
+  int commentsCount;
+    String? reaccionUsuario; // Nueva propiedad para la reacción del usuario
+   Map<String, int>? reaccionesTotales;
+List<Comment>? comentarios;
   Reel({
-    required this.videoId,
-    required this.videoName,
-    required this.videoDescription,
-    required this.videoUserId,
-    required this.videoCreatedAt,
-    required this.reactions,
+    required this.id,
+    required this.nombre,
+    required this.descripcion,
+    required this.createdAt,
     required this.userName,
-    required this.userAvatar,
+    this.userAvatar,
+    required this.likes,
+    required this.commentsCount,
+      this.reaccionUsuario,
+    this.reaccionesTotales,
+    this.comentarios
   });
 
   factory Reel.fromJson(Map<String, dynamic> json) {
+  final user = json['user'] ?? {};
+    Map<String, int>? reacciones = {};
+  if (json['reaccionesTotales'] != null && json['reaccionesTotales'] is Map) {
+    json['reaccionesTotales'].forEach((key, value) {
+      if (value is int) {
+        reacciones![key] = value;
+      }
+    });
+  }
+   List<Comment> comentarioss = [];
+  if (json['comentarios'] != null && json['comentarios'] is List) {
+    comentarioss = (json['comentarios'] as List)
+        .map((c) {
+          print('Comentario JSON: $c');
+          return Comment.fromJson(c);
+        })
+        .toList();
+    print('Cantidad de comentarios parseados: ${comentarioss.length}');
+  }
+
   return Reel(
-    videoId: json['video_id'] ?? '',
-    videoName: json['video_name'] ?? '',
-    videoDescription: json['video_description'] ?? '',
-    videoUserId: json['video_user_id'] ?? '',
-    videoCreatedAt: json['video_created_at'] != null
-        ? DateTime.parse(json['video_created_at'])
-        : DateTime.now(),
-    userName: json['user_name'] ?? '',
-    userAvatar: json['user_avatar'] ?? '',
-    reactions: {
-      "likes": json['likes'] ?? 0,
-      "love": json['love'] ?? 0,
-      "happy": json['happy'] ?? 0,
-    },
+    id: json['id'],
+    nombre: json['nombre'],
+    descripcion: json['descripcion'] ?? '',
+    createdAt: DateTime.parse(json['created_at']),
+    userName: user['nombre'] ?? '',
+    userAvatar: (user['fotos'] != null && user['fotos'].toString().isNotEmpty)
+        ? user['fotos']
+        : 'avatar.png',
+    likes: json['likes_count'] ?? 0,
+    commentsCount: json['commentsCount'] ?? 0,
+     reaccionUsuario: json['reaccionUsuario'],
+    reaccionesTotales: reacciones,
+    comentarios: comentarioss,
   );
 }
 
+  String get videoUrl {
+    // Ajusta esta URL base según dónde tengas alojados tus videos
+    return 'https://iidlive.com/storage/reels/$nombre';
+  }
 }
 
-
-// class Reel {
-//   final String videoId;
-//   final String videoName;
-//   final String videoDescription;
-//   final String videoUserId;
-//   final DateTime videoCreatedAt;
-//   final Map<String, dynamic>? likes; // ✅ Ahora es un Mapa en vez de un String
-//   final String userName;
-//   final String userAvatar;
-
-//   // Constructor de la clase Reel
-//   Reel({
-//     required this.videoId,
-//     required this.videoName,
-//     required this.videoDescription,
-//     required this.videoUserId,
-//     required this.videoCreatedAt,
-//     this.likes,
-//     required this.userName,
-//     required this.userAvatar,
-//   });
-
-//   factory Reel.fromJson(Map<String, dynamic> json) {
-//     return Reel(
-//       videoId: json['video_id'] as String? ?? '', // Si es null, usa un valor vacío
-//       videoName: json['video_name'] as String? ?? '', // Si es null, usa un valor vacío
-//       videoDescription: json['video_description'] as String? ?? '', // Si es null, usa un valor vacío
-//       videoUserId: json['video_user_id'] as String? ?? '', // Si es null, usa un valor vacío
-//       videoCreatedAt: json['video_created_at'] != null
-//           ? DateTime.parse(json['video_created_at'] as String)
-//           : DateTime.now(), // Si es null, usa la fecha actual
-//       userName: json['user_name'] as String? ?? '', // Si es null, usa un valor vacío
-//       likes: json['likes'] as Map<String, dynamic>?, // ✅ Se asigna correctamente como Mapa
-//       userAvatar: json['user_avatar'] as String? ?? '', // Si es null, usa un valor vacío
-//     );
-//   }
-// }
-
-// // class Reel {
-// //   final int id;
-// //   final String title;
-// //   final String videoUrl;
-// //   final String thumbnail;
-// //   final String createdAt;
-
-// //   Reel({
-// //     required this.id,
-// //     required this.title,
-// //     required this.videoUrl,
-// //     required this.thumbnail,
-// //     required this.createdAt,
-// //   });
-
-// //   factory Reel.fromJson(Map<String, dynamic> json) {
-// //     return Reel(
-// //       id: json['id'],
-// //       title: json['title'],
-// //       videoUrl: json['video_url'],
-// //       thumbnail: json['thumbnail'],
-// //       createdAt: json['created_at'],
-// //     );
-// //   }
-// // }

@@ -1,13 +1,17 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:iidlive_app/models/post.dart';
-import 'package:iidlive_app/models/reels.dart';
 import 'package:iidlive_app/models/comment.dart';
+import 'package:iidlive_app/models/reels.dart';
 import 'package:iidlive_app/models/usuarioperfil.dart';
+import 'package:iidlive_app/plantillas/following_screen.dart';
+import 'package:iidlive_app/plantillas/post_card.dart';
+import 'package:iidlive_app/plantillas/sugerencias_screen.dart';
+import 'package:iidlive_app/services/home_services.dart';
+import 'package:iidlive_app/services/post_service.dart';
+import 'package:iidlive_app/widgets/InfluenzometroView.dart';
 import 'package:iidlive_app/widgets/custom_drawer.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 
 class Home extends StatefulWidget {
   final Map<String, dynamic> usuario;
@@ -19,707 +23,836 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
-  String? categoriaSeleccionada;
-  List<String> categorias = [];
-  List<Post> _posts = [];
-  bool _isLoading = true;
-  Map<int, bool> _likedPosts = {};
-  Map<int, List<Comment>> _comments = {};
-  Map<int, bool> _showComments =
-      {}; // Controlar si se muestran o no los comentarios
-  Map<int, TextEditingController> _commentControllers =
-      {}; // controladores por postId
-  void dispose() {
-    // Liberar memoria de los controladores
-    _commentControllers.values.forEach((c) => c.dispose());
-    super.dispose();
+  final PostService postService = PostService(ApiService());
+
+  Map<String, dynamic>? _usuarioData;
+  bool _loadingUsuario = true;
+  bool _errorUsuario = false;
+  Map<int?, List<Comment>> agruparSubcomentarios(List<Comment> comentarios) {
+    final Map<int?, List<Comment>> mapa = {};
+
+    void recorrer(Comment comment) {
+      mapa.putIfAbsent(comment.parentId, () => []).add(comment);
+      for (var reply in comment.replies) {
+        recorrer(reply);
+      }
+    }
+
+    for (var comment in comentarios) {
+      recorrer(comment);
+    }
+
+    return mapa;
   }
+
+  List<Comment> parseComentarios(dynamic jsonList) {
+    if (jsonList == null) return [];
+
+    List<Comment> todos = [];
+
+    for (var json in jsonList) {
+      Comment principal = Comment.fromJson(json);
+      todos.add(principal);
+
+      // Agregar subcomentarios si existen
+      if (principal.replies.isNotEmpty) {
+        todos.addAll(principal.replies);
+      }
+    }
+
+    print('Cantidad de comentarios parseados: ${todos.length}');
+    return todos;
+  }
+
+  List<Post> _posts = [];
+  List<String> categorias = ['Todos'];
+  String categoriaSeleccionada = 'Todos';
+  int currentPage = 1;
+  bool isLoading = false;
+  bool hasMore = true;
+  int? _comentarioIdRespondiendo;
+  final Map<String, String> emojiToNombre = {
+    '🔥': 'me_prendio',
+    '😂': 'me_hizo_reir',
+    '😱': 'que_fuerte',
+    '💀': 'me_mori',
+    '👀': 'estoy_viendo',
+    '💔': 'me_dolio',
+    '🤡': 'payasada',
+    '🤯': 'mind_blown',
+    '🗑️': 'basura',
+    '🌟': 'inspirador',
+  };
+
+  late final Map<String, String> nombreToEmoji = {
+    for (var entry in emojiToNombre.entries) entry.value: entry.key
+  };
+
+  final homeService = ApiService();
+
+  final TextEditingController _commentController = TextEditingController();
+  int? _postIdEnComentario;
 
   @override
   void initState() {
     super.initState();
-    _fetchCategorias();
-    _loadPostsAndLikes();
-    _commentControllers = {};
-    _comments = {};
-    _showComments = {};
 
-    // Inicializa controladores para cada post
-    for (var post in _posts) {
-      _commentControllers[post.id] = TextEditingController();
-    }
-  }
-
-  String formatDate(String dateString) {
-    DateTime dateTime = DateTime.parse(dateString);
-    return DateFormat('yyyy/MM/dd  kk:mm a').format(dateTime);
-  }
-
-  Future<void> _fetchCategorias() async {
-    const String categoriasApiUrl =
-        "http://192.168.50.153:8080/plataforma/get_categorias.php";
-    // "http://169.254.85.101:8080/plataforma/get_categorias.php";
-
-    try {
-      final response = await http.get(Uri.parse(categoriasApiUrl));
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
-        if (data.containsKey('categorias') && data['categorias'] is List) {
-          setState(() {
-            categorias = ['Todos'];
-            categorias.addAll(List<String>.from(
-                data['categorias'].map((c) => c['nameCategoria'] as String)));
-            categoriaSeleccionada = 'Todos'; // Selección inicial
-          });
-        } else {
-          throw Exception('La clave "categorias" no contiene una lista');
-        }
-      } else {
-        throw Exception('Error en la respuesta: ${response.statusCode}');
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final userId = widget.usuario['id'] as int?;
+      if (userId == null) {
+        setState(() {
+          _errorUsuario = true;
+          _loadingUsuario = false;
+        });
+        return;
       }
-    } catch (e) {
-      print("Error al cargar categorías: $e");
-    }
-  }
-
-  Future<List<Post>> _fetchPosts() async {
-    String apiUrl =
-        // "http://192.168.50.153:8080/plataforma/get_post.php";
-        "http://192.168.50.153:8080/plataforma/get_post.php";
-    if (categoriaSeleccionada != null && categoriaSeleccionada != 'Todos') {
-      apiUrl += "?categoria=${Uri.encodeComponent(categoriaSeleccionada!)}";
-    }
-
-    try {
-      final response = await http.get(Uri.parse(apiUrl));
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
-        if (data.containsKey('posts')) {
-          final List<dynamic> postsJson = data['posts'];
-          return postsJson.map((json) => Post.fromJson(json)).toList();
-        } else {
-          throw Exception('El JSON no contiene la clave "posts".');
-        }
-      } else {
-        throw Exception('Error HTTP: ${response.statusCode}');
+      try {
+        final data = await homeService.fetchUserData(userId);
+        setState(() {
+          _usuarioData = data;
+          _loadingUsuario = false;
+        });
+        await _loadCategorias();
+        await _loadMorePosts();
+      } catch (e) {
+        setState(() {
+          _errorUsuario = true;
+          _loadingUsuario = false;
+        });
       }
-    } catch (e) {
-      throw Exception('Error al obtener posts: $e');
-    }
-  }
-
-  Future<void> fetchComments(int postId) async {
-    try {
-      final response = await http.get(Uri.parse(
-          'http://192.168.50.153:8080/plataforma/comments_post.php?post_id=$postId'));
-
-      print('Respuesta del servidor: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-
-        if (data is List) {
-          final commentsList =
-              data.map((json) => Comment.fromJson(json)).toList();
-
-          setState(() {
-            _comments[postId] = commentsList;
-          });
-        } else if (data is Map && data.containsKey('error')) {
-          print('Error del servidor: ${data['error']}');
-        } else {
-          print('Formato de datos inesperado: $data');
-        }
-      } else {
-        print('Error HTTP: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Error al procesar comentarios: $e');
-    }
-  }
-
-  Future<Comment?> _submitComment(int postId, String body) async {
-    try {
-      final response = await http.post(
-        Uri.parse('http://192.168.50.153:8080/plataforma/comments_post.php'),
-        body: {
-          'user_id': widget.usuario['id'].toString(),
-          'post_id': postId.toString(),
-          'body': body,
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return Comment.fromJson(data);
-      } else {
-        print('Error al enviar comentario: ${response.statusCode}');
-        print('Respuesta del servidor: ${response.body}');
-        return null;
-      }
-    } catch (e) {
-      print('Excepción al enviar comentario: $e');
-      return null;
-    }
-  }
-
-// Future<Comment?> _submitComment(int postId, String body) async {
-//   final response = await http.post(
-//     Uri.parse('https://192.168.50.153:8080/plataforma/comments_post.php'),
-//     body: {
-//       'user_id': widget.usuario['id'].toString(),
-//       'post_id': postId.toString(),
-//       'body': body,
-//     },
-//   );
-
-//   if (response.statusCode == 200) {
-//     final data = json.decode(response.body);
-//     return Comment.fromJson(data);
-//   } else {
-//     print('Error al enviar comentario: ${response.body}');
-//     return null;
-//   }
-// }
-
-  Future<bool> postComment({
-    required int userId,
-    required int postId,
-    String? body,
-    int? parentId,
-  }) async {
-    final response = await http.post(
-      Uri.parse('http://192.168.50.153:8080/plataforma/comments_post.php'),
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: {
-        'user_id': widget.usuario['id'].toString(),
-        'post_id': postId.toString(),
-        'body': body,
-      },
-    );
-
-    return json.decode(response.body)['success'] ?? false;
-  }
-
-  Future<void> _sendReaction({
-    required int userId,
-    required int postId,
-    required int likes,
-  }) async {
-    final url = Uri.parse(
-        // "http://192.168.50.153:8080/plataforma/guardar_reaccion.php"
-        "http://192.168.50.153:8080/plataforma/guardar_reaccion.php");
-
-    try {
-      final response = await http.post(
-        url,
-        body: {
-          'user_id': userId.toString(),
-          'post_id': postId.toString(),
-          'likes': likes.toString(),
-          'likeable_type': 'App\\Models\\Post',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true) {
-          print('✅ Reacción guardada: ${data['message']}');
-        } else {
-          print('⚠️ Error desde el servidor: ${data['error']}');
-        }
-      } else {
-        print('❌ Error HTTP: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❗ Error en reacción: $e');
-    }
-  }
-
-  Future<void> _loadPostsAndLikes() async {
-    setState(() {
-      _isLoading = true;
     });
-
-    try {
-      final posts = await _fetchPosts();
-      final prefs = await SharedPreferences.getInstance();
-      final userId = int.parse(widget.usuario['id'].toString());
-
-      Map<int, bool> likedMap = {};
-      Map<int, TextEditingController> newControllers = {};
-
-      for (var post in posts) {
-        bool liked = prefs.getBool('like_post_${post.id}_$userId') ?? false;
-        likedMap[post.id] = liked;
-
-        // Asegúrate de que cada post tenga un controlador de comentarios
-        newControllers[post.id] = TextEditingController();
-      }
-
-      setState(() {
-        _posts = posts;
-        _likedPosts = likedMap;
-        _isLoading = false;
-        _commentControllers = newControllers; // ✅ se actualizan aquí
-      });
-    } catch (e) {
-      print('Error cargando posts y likes: $e');
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 
-  // Future<void> _loadPostsAndLikes() async {
-  //   setState(() {
-  //     _isLoading = true;
-  //   });
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
 
-  //   try {
-  //     final posts = await _fetchPosts();
-  //     final prefs = await SharedPreferences.getInstance();
-  //     final userId = int.parse(widget.usuario['id'].toString());
+  void _mostrarSoloEmojis(BuildContext context, Function(String) onSelect) {
+    final emojis = [
+      '🔥',
+      '😂',
+      '😱',
+      '💀',
+      '👀',
+      '💔',
+      '🤡',
+      '🤯',
+      '🗑️',
+      '🌟'
+    ];
 
-  //     Map<int, bool> likedMap = {};
-  //     for (var post in posts) {
-  //       bool liked = prefs.getBool('like_post_${post.id}_$userId') ?? false;
-  //       likedMap[post.id] = liked;
-  //     }
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: emojis.map((emoji) {
+            return GestureDetector(
+              onTap: () {
+                Navigator.of(context).pop();
+                onSelect(emoji);
+              },
+              child: Text(emoji, style: const TextStyle(fontSize: 30)),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
 
-  //     setState(() {
-  //       _posts = posts;
-  //       _likedPosts = likedMap;
-  //       _isLoading = false;
-  //     });
-  //   } catch (e) {
-  //     print('Error cargando posts y likes: $e');
-  //     setState(() {
-  //       _isLoading = false;
-  //     });
-  //   }
-  // }
+  Future<void> _loadCategorias() async {
+    try {
+      final cats = await postService.fetchCategorias();
+      setState(() {
+        categorias = ['Todos', ...cats];
+      });
+    } catch (e) {}
+  }
+
+  Future<void> _loadMorePosts() async {
+    if (isLoading || !hasMore) return;
+    setState(() => isLoading = true);
+
+    try {
+      final newPosts = await postService.fetchAllPosts(
+        page: currentPage,
+        category:
+            categoriaSeleccionada != 'Todos' ? categoriaSeleccionada : null,
+      );
+
+      setState(() {
+        _posts.addAll(newPosts);
+        currentPage++;
+        if (newPosts.isEmpty) {
+          hasMore = false;
+        }
+      });
+    } catch (e) {
+      print('Error al cargar posts: $e');
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
 
   void _onCategoriaChanged(String? newCategoria) {
     setState(() {
-      categoriaSeleccionada = newCategoria;
+      categoriaSeleccionada = newCategoria ?? 'Todos';
+      currentPage = 1;
+      _posts.clear();
+      hasMore = true;
     });
-    _loadPostsAndLikes();
+    _loadMorePosts();
   }
 
-  Future<String?> _getUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('usuario');
+  String formatDate(DateTime dateTime) {
+    return DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
   }
 
   Future<void> _logout(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await prefs.remove('usuario');
     Navigator.pushReplacementNamed(context, '/login');
   }
 
-  //imagen del post
-  String getImageUrl(String imagePath) {
-    const baseUrl = "http://192.168.50.153:8080/plataforma/";
-    //'http://169.254.191.190:8080/plataforma/';
-    return baseUrl + imagePath.replaceFirst('plataforma/', '');
+  Future<void> _enviarComentario(Post post) async {
+    final text = _commentController.text.trim();
+    if (text.isEmpty) return;
+
+    try {
+      await postService.enviarComentario(
+        postId: post.id,
+        body: text,
+        parentId: _comentarioIdRespondiendo,
+      );
+
+      _commentController.clear();
+      _comentarioIdRespondiendo = null;
+      _postIdEnComentario = null;
+
+      await _recargarComentarios(post); // recarga comentarios actualizados
+    } catch (e) {
+      print('Error al enviar comentario: $e');
+    }
   }
 
-  String getUserAvatarUrl(String? fileName) {
-    const baseUrl = 'http://192.168.50.153:8080/';
-    //'http://169.254.191.190:8080/'; // tu IP y puerto
-    if (fileName == null || fileName.isEmpty) {
-      return 'http://192.168.50.153:8080/plataforma/perfil/avatar.png';
-      //'http://169.254.191.190:8080/plataforma/perfil/avatar.png';
+  Future<void> _recargarComentarios(Post post) async {
+    try {
+      final response = await postService.apiService
+          .fetchPostById(post.id); // <- necesitas este método
+      setState(() {
+        post.comentarios = parseComentarios(response['comentarios']);
+      });
+    } catch (e) {
+      print('Error al recargar comentarios: $e');
     }
-    return baseUrl + fileName; // Concatenamos la ruta completa
+  }
+
+  // Future<void> _enviarComentario(Post post) async {
+  //   final body = _commentController.text.trim();
+  //   if (body.isEmpty) return;
+
+  //   try {
+  //     await postService.enviarComentario(
+  //       postId: post.id,
+  //       body: body,
+  //       tipo: 'App\\Models\\Post',
+  //     );
+
+  //     setState(() {
+  //       (post.comentarios ??= []).add(Comment(
+  //         id: DateTime.now().millisecondsSinceEpoch,
+  //         body: body,
+  //         userName: _usuarioData?['nombre'] ?? 'Tú',
+  //         userAvatar: _usuarioData?['avatar'] ?? '',
+  //         createdAt: DateTime.now().toIso8601String(),
+  //         parentId: null,
+  //       ));
+  //     });
+
+  //     _commentController.clear();
+  //     _postIdEnComentario = null;
+  //   } catch (e) {
+  //     print('Error al enviar comentario: $e');
+  //   }
+  // }
+  Map<int?, List<Comment>> construirMapaSubcomentarios(
+      List<Comment> comentarios) {
+    Map<int?, List<Comment>> map = {};
+
+    for (var comment in comentarios) {
+      final key = comment.parentId; // puede ser null para comentarios padre
+      if (map.containsKey(key)) {
+        map[key]!.add(comment);
+      } else {
+        map[key] = [comment];
+      }
+    }
+
+    return map;
+  }
+String formatFechaComentario(String isoDate) {
+  try {
+    final date = DateTime.parse(isoDate);
+    return DateFormat('dd/MM/yyyy HH:mm').format(date);
+  } catch (_) {
+    return '';
+  }
+}
+  // --- Función para agrupar subcomentarios ---
+  // Map<int, List<Comment>> agruparSubcomentarios(List<Comment> comentarios) {
+  //   Map<int, List<Comment>> mapa = {};
+
+  //   for (var comment in comentarios) {
+  //     if (comment.parentId != null) {
+  //       mapa.putIfAbsent(comment.parentId!, () => []).add(comment);
+  //     }
+  //   }
+
+  //   return mapa;
+  // }
+
+  Widget construirComentariosRecursivo(
+      Map<int?, List<Comment>> subcomentariosMap, int postId,
+      [int? parentId]) {
+    final comentarios = subcomentariosMap[parentId] ?? [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: comentarios.map((comment) {
+        return Padding(
+          padding: EdgeInsets.only(left: parentId == null ? 0 : 40, bottom: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8.0),
+                leading: CircleAvatar(
+                  radius: 16,
+                  backgroundImage:
+                      NetworkImage(getUserAvatarUrl(comment.userAvatar)),
+                  backgroundColor: Colors.grey[300],
+                ),
+                title: Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    Text(
+      comment.userName,
+      style: const TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 14,
+        color: Colors.black,
+      ),
+    ),
+    if (comment.createdAt != null)
+      Text(
+        formatFechaComentario(comment.createdAt!),
+        style: const TextStyle(
+          fontSize: 11,
+          color: Colors.grey,
+        ),
+      ),
+  ],
+),
+subtitle: Text(
+  comment.body,
+  style: const TextStyle(
+    fontSize: 13,
+    color: Colors.black87,
+  ),
+),
+              ),
+
+              // Botón Responder
+              Padding(
+                padding: const EdgeInsets.only(left: 50, bottom: 4),
+                child: TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _postIdEnComentario = postId;
+                      _comentarioIdRespondiendo = comment.id;
+                      _commentController.clear();
+                    });
+                  },
+                  child: const Text(
+                    'Responder',
+                    style: TextStyle(color: Colors.deepPurple),
+                  ),
+                ),
+              ),
+
+              // Campo para escribir la respuesta si se seleccionó este comentario
+              if (_postIdEnComentario == postId &&
+                  _comentarioIdRespondiendo == comment.id)
+                Padding(
+                  padding: const EdgeInsets.only(left: 50, bottom: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _commentController,
+                          decoration: InputDecoration(
+                            hintText: 'Responder a ${comment.userName}...',
+                            border: const OutlineInputBorder(),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.send, color: Colors.deepPurple),
+                        onPressed: () async {
+                          await _enviarComentario(
+                            _posts.firstWhere((p) => p.id == postId),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Recursividad para subcomentarios
+              construirComentariosRecursivo(
+                  subcomentariosMap, postId, comment.id),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  void _showComentariosModal(BuildContext context, Post post) {
+    _commentController.clear();
+    _postIdEnComentario = post.id;
+    _comentarioIdRespondiendo = null;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, // para que el modal sea alto y permita teclado
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        // Mapa de subcomentarios para el post actual
+        final subcomentariosMap = agruparSubcomentarios(post.comentarios ?? []);
+
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            top: 16,
+            left: 16,
+            right: 16,
+          ),
+          child: DraggableScrollableSheet(
+            expand: false,
+            maxChildSize: 0.9,
+            minChildSize: 0.4,
+            builder: (context, scrollController) {
+              return Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ListView(
+                      controller: scrollController,
+                      children: [
+                        Text(
+                          'Comentarios',
+                          style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.deepPurple),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Mostrar los comentarios recursivamente
+                        if ((post.comentarios ?? []).isNotEmpty)
+                          construirComentariosRecursivo(
+                              subcomentariosMap, post.id)
+                        else
+                          const Center(
+                              child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Text('No hay comentarios aún.'),
+                          )),
+                      ],
+                    ),
+                  ),
+
+                  // Campo para agregar comentario o respuesta
+                  if (_postIdEnComentario == post.id)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _commentController,
+                              decoration: InputDecoration(
+                                hintText: _comentarioIdRespondiendo == null
+                                    ? 'Escribe un comentario...'
+                                    : 'Respondiendo...',
+                                border: OutlineInputBorder(),
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.send, color: Colors.deepPurple),
+                            onPressed: () async {
+                              await _enviarComentario(post);
+                              // Opcional: cerrar el teclado
+                              FocusScope.of(context).unfocus();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    ).whenComplete(() {
+      // Al cerrar el modal, limpiar estado
+      setState(() {
+        _postIdEnComentario = null;
+        _comentarioIdRespondiendo = null;
+        _commentController.clear();
+      });
+    });
+  }
+
+  int contarComentariosConSub(List<Comment> comentarios) {
+    int total = 0;
+
+    for (var comment in comentarios) {
+      total++; // comentario principal
+      total += comment.replies.length; // subcomentarios
+    }
+
+    return total;
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<String?>(
-      future: _getUserData(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError || !snapshot.hasData) {
-          return const Center(child: Text('Error al cargar datos'));
-        } else {
-          final userJson = jsonDecode(snapshot.data!) as Map<String, dynamic>;
-          final usuario = Usuario.fromJson(userJson);
+    if (_loadingUsuario) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-          return Scaffold(
-            backgroundColor: Colors.grey[10],
-            appBar: AppBar(
-              backgroundColor: const Color(0xFFC17C9C),
-              title: const Text('Bienvenido a tu muro',
-                  style: TextStyle(color: Colors.white)),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.video_collection,
-                      size: 30, color: Colors.white),
-                  onPressed: () {
-                    final myReel = Reel(
-                      videoId: '1',
-                      videoName: 'video.mp4',
-                      videoDescription: 'Descripción del video',
-                      videoUserId: 'user1',
-                      videoCreatedAt: DateTime.now(),
-                      reactions: {"likes": 0, "love": 0, "happy": 0},
-                      userName: 'Usuario',
-                      userAvatar: 'url_avatar',
-                    );
-                    Navigator.pushNamed(context, '/vistaReels',
-                        arguments: myReel);
-                  },
-                )
-              ],
-            ),
-            drawer: CustomDrawer(
-              usuario: usuario,
-              parentContext: context,
-              onLogout: () => _logout(context),
-            ),
-            body: Stack(
+    if (_errorUsuario || _usuarioData == null) {
+      return const Scaffold(
+        body: Center(child: Text('Error al cargar datos')),
+      );
+    }
+
+    final usuario = Usuario.fromJson(_usuarioData!);
+
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFC17C9C),
+        title: const Text('Bienvenido a tu muro',
+            style: TextStyle(color: Colors.white)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.video_collection,
+                size: 30, color: Colors.white),
+            onPressed: () {
+              final myReel = Reel(
+                id: 1,
+                nombre: 'video.mp4',
+                descripcion: 'Descripción del video',
+                createdAt: DateTime.now(),
+                userName: 'Usuario',
+                userAvatar: 'url_avatar',
+                likes: 0,
+                commentsCount: 0,
+              );
+
+              Navigator.pushNamed(context, '/vistaReels', arguments: myReel);
+            },
+          )
+        ],
+      ),
+      drawer: CustomDrawer(
+        usuario: usuario,
+        parentContext: context,
+        onLogout: () => _logout(context),
+      ),
+      body: Stack(
+        children: [
+          Container(
+            color: const Color(0xFFC17C9C),
+            height: MediaQuery.of(context).size.height * 0.6,
+            width: double.infinity,
+          ),
+          SafeArea(
+            child: ListView(
+              padding: EdgeInsets.zero,
               children: [
-                Container(
-                  color: const Color(0xFFC17C9C),
-                  height: MediaQuery.of(context).size.height * 0.6,
-                  width: double.infinity,
-                ),
-                SafeArea(
-                  child: Container(
-                    margin: const EdgeInsets.only(top: 20),
-                    child: Column(
-                      children: [
-                        if (categorias.isNotEmpty) ...[
-                          // Padding(
-                          //   padding: const EdgeInsets.symmetric(horizontal: 10),
-                          //   child: DropdownButton<String>(
-                          //     value: categoriaSeleccionada,
-                          //     hint: const Text('Selecciona una categoría'),
-                          //     isExpanded: true,
-                          //     onChanged: _onCategoriaChanged,
-                          //     items: categorias.map((categoria) {
-                          //       return DropdownMenuItem(
-                          //         value: categoria,
-                          //         child: Text(categoria),
-                          //       );
-                          //     }).toList(),
-                          //   ),
-                          // ),
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            child: Row(
-                              children: categorias.map((categoria) {
-                                final isSelected =
-                                    categoria == categoriaSeleccionada;
-                                return Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 4),
-                                  child: ElevatedButton(
-                                    onPressed: () {
-                                      _onCategoriaChanged(categoria);
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: isSelected
-                                          ? Colors.deepPurple
-                                          : Colors.grey[300],
-                                      foregroundColor: isSelected
-                                          ? Colors.white
-                                          : Colors.black,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(20)),
-                                    ),
-                                    child: Text(categoria),
-                                  ),
-                                );
-                              }).toList(),
+                const SizedBox(height: 10),
+                const SizedBox(height: 190, child: InfluenzometroContainer()),
+                const SizedBox(height: 10),
+                const SizedBox(height: 190, child: SugerenciasScreen()),
+                const SizedBox(height: 10),
+                if (categorias.isNotEmpty)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Row(
+                      children: categorias.map((cat) {
+                        final isSelected = cat == categoriaSeleccionada;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: ElevatedButton(
+                            onPressed: () => _onCategoriaChanged(cat),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isSelected
+                                  ? Colors.deepPurple
+                                  : Colors.grey[300],
+                              foregroundColor:
+                                  isSelected ? Colors.white : Colors.black,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
                             ),
+                            child: Text(cat),
                           ),
-                        ],
-                        Expanded(
-                          child: _isLoading
-                              ? const Center(child: CircularProgressIndicator())
-                              : _posts.isEmpty
-                                  ? const Center(
-                                      child: Text('No hay posts disponibles.'))
-                                  : ListView.builder(
-                                      itemCount: _posts.length,
-                                      itemBuilder: (context, index) {
-                                        final post = _posts[index];
-                                        final isLiked =
-                                            _likedPosts[post.id] ?? false;
-
-                                        return Card(
-                                          margin: const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 8),
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(20)),
-                                          color: Colors.white,
-                                          elevation: 5,
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(12),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    CircleAvatar(
-                                                      radius: 20,
-                                                      foregroundImage:
-                                                          NetworkImage(
-                                                              getUserAvatarUrl(post
-                                                                  .userAvatar)),
-                                                      backgroundColor:
-                                                          Colors.grey[200],
-                                                    ),
-                                                    const SizedBox(width: 10),
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        children: [
-                                                          Text(
-                                                            post.userName,
-                                                            style: const TextStyle(
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold),
-                                                          ),
-                                                          const SizedBox(
-                                                              height: 2),
-                                                          Text(
-                                                            formatDate(
-                                                                post.createdAt),
-                                                            style:
-                                                                const TextStyle(
-                                                              color: Color
-                                                                  .fromARGB(255,
-                                                                      1, 1, 1),
-                                                              fontSize: 12,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 10),
-                                                Text(post.content),
-                                                if (post.imageUrl != null &&
-                                                    post.imageUrl!.isNotEmpty)
-                                                  Padding(
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        vertical: 10),
-                                                    child: Image.network(
-                                                      getImageUrl(
-                                                          post.imageUrl!),
-                                                      fit: BoxFit.cover,
-                                                    ),
-                                                  ),
-                                                // Likes y botón de comentarios
-                                                Row(
-                                                  children: [
-                                                    IconButton(
-                                                      icon: Icon(
-                                                        isLiked
-                                                            ? Icons.favorite
-                                                            : Icons
-                                                                .favorite_border,
-                                                        color: isLiked
-                                                            ? Colors.red
-                                                            : Colors.grey,
-                                                      ),
-                                                      onPressed: () async {
-                                                        final prefs =
-                                                            await SharedPreferences
-                                                                .getInstance();
-                                                        setState(() {
-                                                          if (isLiked) {
-                                                            post.likesCount--;
-                                                            _likedPosts[post
-                                                                .id] = false;
-                                                            prefs.remove(
-                                                                'like_post_${post.id}_${widget.usuario['id']}');
-                                                            _sendReaction(
-                                                              userId: int.parse(
-                                                                  widget
-                                                                      .usuario[
-                                                                          'id']
-                                                                      .toString()),
-                                                              postId: post.id,
-                                                              likes: 0,
-                                                            );
-                                                          } else {
-                                                            post.likesCount++;
-                                                            _likedPosts[
-                                                                post.id] = true;
-                                                            prefs.setBool(
-                                                                'like_post_${post.id}_${widget.usuario['id']}',
-                                                                true);
-                                                            _sendReaction(
-                                                              userId: int.parse(
-                                                                  widget
-                                                                      .usuario[
-                                                                          'id']
-                                                                      .toString()),
-                                                              postId: post.id,
-                                                              likes: 1,
-                                                            );
-                                                          }
-                                                        });
-                                                      },
-                                                    ),
-                                                    Text(
-                                                        '${post.likesCount} Likes'),
-                                                    const SizedBox(width: 10),
-                                                    IconButton(
-                                                      icon: const Icon(
-                                                          Icons.comment,
-                                                          color: Colors.grey),
-                                                      onPressed: () async {
-                                                        final show =
-                                                            _showComments[
-                                                                    post.id] ??
-                                                                false;
-                                                        if (!show) {
-                                                          await fetchComments(
-                                                              post.id);
-                                                        }
-                                                        setState(() {
-                                                          _showComments[
-                                                              post.id] = !show;
-                                                        });
-                                                      },
-                                                    ),
-                                                    const Text(' Comentarios'),
-                                                  ],
-                                                ),
-
-                                                if (_showComments[post.id] ==
-                                                    true) ...[
-                                                  const SizedBox(height: 10),
-                                                  Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      for (final comment
-                                                          in _comments[
-                                                                  post.id] ??
-                                                              [])
-                                                        Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                                  vertical:
-                                                                      4.0),
-                                                          child: Text(
-                                                            '${comment.userName}: ${comment.body}',
-                                                            style:
-                                                                const TextStyle(
-                                                                    fontSize:
-                                                                        14),
-                                                          ),
-                                                        ),
-                                                      const SizedBox(
-                                                          height: 10),
-                                                      Row(
-                                                        children: [
-                                                          Expanded(
-                                                            child: TextField(
-                                                              controller:
-                                                                  _commentControllers[
-                                                                      post.id],
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                hintText:
-                                                                    'Escribe un comentario...',
-                                                                border:
-                                                                    OutlineInputBorder(),
-                                                                contentPadding:
-                                                                    EdgeInsets.symmetric(
-                                                                        horizontal:
-                                                                            8,
-                                                                        vertical:
-                                                                            4),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                          IconButton(
-                                                              icon: const Icon(
-                                                                  Icons.send),
-                                                              onPressed:
-                                                                  () async {
-                                                                final text =
-                                                                    _commentControllers[post.id]
-                                                                            ?.text ??
-                                                                        '';
-                                                                if (text
-                                                                    .isEmpty)
-                                                                  return;
-
-                                                                print(
-                                                                    'Enviando comentario: $text');
-
-                                                                final newComment =
-                                                                    await _submitComment(
-                                                                        post.id,
-                                                                        text);
-
-                                                                if (newComment !=
-                                                                    null) {
-                                                                  setState(() {
-                                                                    _comments[post
-                                                                        .id] = (_comments[post
-                                                                            .id] ??
-                                                                        [])
-                                                                      ..add(
-                                                                          newComment);
-                                                                    _commentControllers[
-                                                                            post.id]
-                                                                        ?.clear();
-                                                                  });
-                                                                } else {
-                                                                  ScaffoldMessenger.of(
-                                                                          context)
-                                                                      .showSnackBar(
-                                                                    const SnackBar(
-                                                                        content:
-                                                                            Text('Error al enviar comentario')),
-                                                                  );
-                                                                }
-                                                              })
-                                                        ],
-                                                      )
-                                                    ],
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                        ),
-                      ],
+                        );
+                      }).toList(),
                     ),
                   ),
-                ),
+                const SizedBox(height: 10),
+                if (isLoading && _posts.isEmpty)
+                  const Center(child: CircularProgressIndicator())
+                else if (_posts.isEmpty)
+                  const Center(child: Text('No hay posts disponibles'))
+                else
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _posts.length + (hasMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _posts.length) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 10),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+
+                      final post = _posts[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
+                        color: Colors.white,
+                        elevation: 5,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Encabezado del post (usuario, fecha, categoría)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 20,
+                                    foregroundImage: NetworkImage(
+                                        getUserAvatarUrl(post.userAvatar)),
+                                    backgroundColor: Colors.grey[200],
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          post.userName,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          formatDate(
+                                              DateTime.parse(post.createdAt)),
+                                          style: const TextStyle(
+                                            color: Color.fromARGB(255, 1, 1, 1),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        if (post.nameCategoria.isNotEmpty)
+                                          Text(
+                                            post.nameCategoria,
+                                            style: const TextStyle(
+                                              color: Color.fromARGB(
+                                                  255, 175, 132, 132),
+                                              fontSize: 12,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+
+                              // Contenido del post (texto)
+                              PostWidget(content: post.content),
+
+                              // Imagen si existe
+                              if (post.imageUrl != null &&
+                                  post.imageUrl!.isNotEmpty)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 10),
+                                  child: Image.network(
+                                    postService.apiService
+                                        .getImageUrl(post.imageUrl!),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+
+                              const Divider(),
+
+                              // Reacciones y comentarios
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  // Botón para seleccionar reacción con emojis
+                                  Row(
+                                    children: [
+                                      IconButton(
+                                        icon: Text(
+                                          post.reaccionUsuario != null
+                                              ? emojiToNombre.entries
+                                                  .firstWhere(
+                                                      (e) =>
+                                                          e.value ==
+                                                          post.reaccionUsuario,
+                                                      orElse: () =>
+                                                          const MapEntry(
+                                                              '😊', ''))
+                                                  .key
+                                              : '😊',
+                                          style: const TextStyle(fontSize: 24),
+                                        ),
+                                        onPressed: () {
+                                          _mostrarSoloEmojis(context,
+                                              (emoji) async {
+                                            final tipo = emojiToNombre[emoji];
+                                            if (tipo == null) {
+                                              print('❌ Reacción inválida');
+                                              return;
+                                            }
+
+                                            await postService.enviarReaccion(
+                                                post.id.toString(), tipo);
+                                            setState(() {
+                                              post.reaccionUsuario = tipo;
+                                              post.reaccionesTotales ??= {};
+                                              post.reaccionesTotales![tipo] =
+                                                  (post.reaccionesTotales![
+                                                              tipo] ??
+                                                          0) +
+                                                      1;
+                                            });
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+
+                                  // Mostrar conteo de reacciones en chips
+                                  if (post.reaccionesTotales != null &&
+                                      post.reaccionesTotales!.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: Wrap(
+                                        spacing: 8,
+                                        runSpacing: 4,
+                                        children: post
+                                            .reaccionesTotales!.entries
+                                            .map((entry) {
+                                          final emoji =
+                                              nombreToEmoji[entry.key] ?? '';
+                                          final count_tipo = entry.value;
+                                          return Chip(
+                                            backgroundColor: Colors.grey[200],
+                                            label: Text('$emoji $count_tipo'),
+                                          );
+                                        }).toList(),
+                                      ),
+                                    ),
+                                ],
+                              ),
+
+                              // Mostrar comentarios con subcomentarios anidados
+                              const SizedBox(height: 10),
+                              TextButton.icon(
+                                onPressed: () {
+                                  _showComentariosModal(context, post);
+                                },
+                                icon: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.comment,
+                                        color: Colors.deepPurple),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${contarComentariosConSub(post.comentarios ?? [])}',
+                                      style: const TextStyle(
+                                        color: Colors.deepPurple,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                label: const Text(
+                                  'Ver comentarios',
+                                  style: TextStyle(color: Colors.deepPurple),
+                                ),
+                              ),
+
+
+                              const SizedBox(height: 10),
+
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
               ],
             ),
-          );
-        }
-      },
+          ),
+        ],
+      ),
     );
   }
 }

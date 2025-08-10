@@ -5,17 +5,17 @@ import 'package:iidlive_app/models/usuarioperfil.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:iidlive_app/widgets/custom_drawer.dart';
 
 class CreatePostPage extends StatefulWidget {
   final int userId;
   final Map<String, dynamic> usuario;
 
-  CreatePostPage({required this.userId, this.usuario = const {}});
-
-  @override
-  _CreatePostScreenState createState() => _CreatePostScreenState();
+  const CreatePostPage({
+    Key? key,
+    required this.userId,
+    this.usuario = const {},
+  }) : super(key: key);
 
   static CreatePostPage fromArguments(Map<String, dynamic> args) {
     return CreatePostPage(
@@ -23,6 +23,9 @@ class CreatePostPage extends StatefulWidget {
       usuario: args['usuario'] ?? {},
     );
   }
+
+  @override
+  _CreatePostScreenState createState() => _CreatePostScreenState();
 }
 
 class _CreatePostScreenState extends State<CreatePostPage> {
@@ -31,26 +34,22 @@ class _CreatePostScreenState extends State<CreatePostPage> {
   int? _selectedCategory;
   List<Map<String, dynamic>> _categories = [];
   bool _isLoading = false;
-  
- 
 
   @override
   void initState() {
     super.initState();
-    print(widget.usuario);
-     // Verificar los datos del usuario
+    print("Usuario recibido: ${widget.usuario}");
     _fetchCategories();
   }
 
   Future<void> _fetchCategories() async {
     try {
-      final response = await http.get(Uri.parse("http://192.168.50.153:8080/plataforma/get_categorias.php"));
-
+      final response = await http.get(Uri.parse("https://iidlive.com/api/categorias"));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data is Map<String, dynamic> && data['categorias'] != null) {
+        if (data is Map<String, dynamic> && data['data'] != null) {
           setState(() {
-            _categories = List<Map<String, dynamic>>.from(data['categorias']);
+            _categories = List<Map<String, dynamic>>.from(data['data']);
           });
         } else {
           throw Exception("La respuesta no contiene categorías.");
@@ -72,37 +71,51 @@ class _CreatePostScreenState extends State<CreatePostPage> {
     }
   }
 
-  Future<void> createPost({
-    required String descripcion,
-    required int categoriaId,
-    required int userId,
-    File? image,
-  }) async {
-    final uri = Uri.parse("http://192.168.50.153:8080/plataforma/post.php");
-    var request = http.MultipartRequest('POST', uri)
-      ..fields['content'] = descripcion
-      ..fields['category_id'] = categoriaId.toString()
-      ..fields['user_id'] = userId.toString();
+ Future<void> createPost({
+  required BuildContext context,
+  required String descripcion,
+  required int categoriaId,
+  File? image,
+}) async {
+  final uri = Uri.parse("https://iidlive.com/api/posts/store");
 
-    if (image != null) {
-      request.files.add(await http.MultipartFile.fromPath('image', image.path));
-    }
+  var request = http.MultipartRequest('POST', uri)
+  
+    ..fields['content'] = descripcion
+    ..fields['user_id'] = widget.userId.toString()
+    ..fields['category'] = categoriaId.toString()
+    ..fields['published_at'] = DateTime.now().toIso8601String()
+    ..headers['Accept'] = 'application/json';
 
-    final response = await request.send();
-
-    if (response.statusCode == 200) {
-      final responseData = await response.stream.bytesToString();
-      final result = jsonDecode(responseData);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result['mensaje'])),
-      );
-    } else {
-      throw Exception("Error al crear el post.");
-    }
+  if (image != null) {
+    request.files.add(await http.MultipartFile.fromPath('image', image.path));
   }
 
+  try {
+    final streamedResponse = await request.send();
+    final responseString = await streamedResponse.stream.bytesToString();
+
+    if (streamedResponse.statusCode == 200 || streamedResponse.statusCode == 201) {
+      final result = jsonDecode(responseString);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result['mensaje'] ?? 'Post creado con éxito')),
+      );
+    } else {
+      print("❌ Error al crear post: $responseString");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error al crear post: $responseString")),
+      );
+    }
+  } catch (e) {
+    print('❌ Error al crear el post: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error al crear el post: $e')),
+    );
+  }
+}
+
   Future<void> _handleCreatePost() async {
-    String descripcion = _descripcionController.text.trim();
+    final descripcion = _descripcionController.text.trim();
 
     if (descripcion.isEmpty || _selectedCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -111,35 +124,37 @@ class _CreatePostScreenState extends State<CreatePostPage> {
       return;
     }
 
-    try {
-      await createPost(
-        descripcion: descripcion,
-        categoriaId: _selectedCategory!,
-        userId: widget.userId,
-        image: _image,
-      );
+    setState(() => _isLoading = true);
+    await createPost(
+  context: context,
+  descripcion: descripcion,
+  categoriaId: _selectedCategory!,
+  image: _image,
+);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Post creado con éxito.")),
-      );
-
-      setState(() {
-        _descripcionController.clear();
-        _selectedCategory = null;
-        _image = null;
-      });
-    } catch (e) {
-      print("Error al crear el post: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error al crear el post: $e")),
-      );
-    }
+    setState(() {
+      _isLoading = false;
+      _descripcionController.clear();
+      _selectedCategory = null;
+      _image = null;
+    });
   }
 
   Future<void> _logout(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     Navigator.pushReplacementNamed(context, '/login');
+  }
+
+
+  Future<Map<String, dynamic>?> _getUserData(int userId) async {
+    final response = await http.get(Uri.parse('https://iidlive.com/api/usuario/$userId'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body)['usuario'];
+    } else {
+      print("❌ Error al obtener usuario $userId");
+      return null;
+    }
   }
 
   @override
@@ -150,7 +165,7 @@ class _CreatePostScreenState extends State<CreatePostPage> {
         backgroundColor: const Color(0xFFC17C9C),
       ),
       drawer: CustomDrawer(
-         usuario: Usuario.fromJson(widget.usuario),
+        usuario: Usuario.fromJson(widget.usuario),
         parentContext: context,
         onLogout: () => _logout(context),
       ),
@@ -187,7 +202,7 @@ class _CreatePostScreenState extends State<CreatePostPage> {
               _categories.isEmpty
                   ? Center(child: CircularProgressIndicator())
                   : Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
                         color: Colors.teal.shade50,
                         borderRadius: BorderRadius.circular(15),
@@ -195,11 +210,9 @@ class _CreatePostScreenState extends State<CreatePostPage> {
                       ),
                       child: DropdownButtonFormField<int>(
                         value: _selectedCategory,
-                        decoration: InputDecoration.collapsed(hintText: ""),
-                        hint: Text("Selecciona una categoría"),
-                        onChanged: (value) {
-                          setState(() => _selectedCategory = value);
-                        },
+                        decoration: const InputDecoration.collapsed(hintText: ""),
+                        hint: const Text("Selecciona una categoría"),
+                        onChanged: (value) => setState(() => _selectedCategory = value),
                         items: _categories.map((cat) {
                           return DropdownMenuItem<int>(
                             value: int.parse(cat["id"].toString()),
@@ -211,7 +224,7 @@ class _CreatePostScreenState extends State<CreatePostPage> {
               const SizedBox(height: 20),
               Center(
                 child: _image == null
-                    ? Text("No se ha seleccionado ninguna imagen.")
+                    ? const Text("No se ha seleccionado ninguna imagen.")
                     : Container(
                         height: MediaQuery.of(context).size.height * 0.4,
                         decoration: BoxDecoration(
@@ -239,7 +252,7 @@ class _CreatePostScreenState extends State<CreatePostPage> {
               const SizedBox(height: 16),
               Center(
                 child: _isLoading
-                    ? CircularProgressIndicator()
+                    ? const CircularProgressIndicator()
                     : ElevatedButton.icon(
                         onPressed: _handleCreatePost,
                         icon: const Icon(Icons.send),

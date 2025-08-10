@@ -1,8 +1,8 @@
-import 'dart:convert';
+//import 'dart:convert';
 import 'package:flutter/material.dart';
-
-import 'package:http/http.dart' as http;
+//import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:iidlive_app/services/registro_service.dart';
 
 class Registro extends StatefulWidget {
   const Registro({Key? key}) : super(key: key);
@@ -13,12 +13,10 @@ class Registro extends StatefulWidget {
 
 class _RegistroState extends State<Registro> {
   final TextEditingController _nombreController = TextEditingController();
-  final TextEditingController _nombreUsuarioController =
-      TextEditingController();
+  final TextEditingController _nombreUsuarioController = TextEditingController();
   final TextEditingController _correoController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
-      TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
   final TextEditingController _birthDateController = TextEditingController();
 
   bool _isLoading = false;
@@ -27,70 +25,109 @@ class _RegistroState extends State<Registro> {
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Registro de Usuario")),
+      appBar: AppBar(
+        title: const Text("Registro de Usuario"),
+        backgroundColor: const Color(0xFFE86CA6),
+        elevation: 0,
+      ),
+      backgroundColor: Colors.grey[100],
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: SingleChildScrollView(
-          child: Column(
-            children: [
-              _buildTextField(_nombreController, "Nombre", Icons.person),
-              _buildTextField(_nombreUsuarioController, "Nombre de Usuario",
-                  Icons.person_outline),
-              _buildTextField(
-                  _correoController, "Correo Electrónico", Icons.email),
-              _buildPasswordField(
-                  _passwordController, "Contraseña", Icons.lock, true),
-              _buildPasswordField(_confirmPasswordController,
-                  "Confirmar Contraseña", Icons.lock_outline, false),
-              _buildDatePickerField(),
-              const SizedBox(height: 20),
-              _isLoading
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      onPressed: _registerUser,
-                      child: const Text("Registrarse"),
+          child: Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            elevation: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                children: [
+                  _buildTextField(_nombreController, "Nombre completo", Icons.person),
+                  const SizedBox(height: 10),
+                  _buildTextField(_nombreUsuarioController, "Nombre de Usuario", Icons.person_outline),
+                  const SizedBox(height: 10),
+                  _buildTextField(_correoController, "Correo Electrónico", Icons.email),
+                  const SizedBox(height: 10),
+                  _buildPasswordField(_passwordController, "Contraseña", Icons.lock, true),
+                  const SizedBox(height: 10),
+                  _buildPasswordField(_confirmPasswordController, "Confirmar Contraseña", Icons.lock_outline, false),
+                  const SizedBox(height: 10),
+                  _buildDatePickerField(),
+                  const SizedBox(height: 20),
+                  _isLoading
+                      ? const CircularProgressIndicator()
+                      : SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE86CA6),
+                              foregroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            onPressed: registerUser,
+                            child: const Text(
+                              "Registrarse",
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushReplacementNamed(context, '/login');
+                    },
+                    child: const Text(
+                      "Volver al login",
+                      style: TextStyle(color: Colors.grey),
                     ),
-              OutlinedButton(
-                onPressed: () {
-                  Navigator.pushReplacementNamed(context, '/login');
-                },
-                child: const Text("Volver al login"),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTextField(
-      TextEditingController controller, String label, IconData icon) {
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon) {
     return TextField(
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon),
+        prefixIcon: Icon(icon, color: Colors.deepPurple),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        filled: true,
+        fillColor: Colors.grey[200],
       ),
     );
   }
 
-  Widget _buildPasswordField(TextEditingController controller, String label,
-      IconData icon, bool isPassword) {
+  Widget _buildPasswordField(TextEditingController controller, String label, IconData icon, bool isPassword) {
     return TextField(
       controller: controller,
-      obscureText:
-          isPassword ? !_isPasswordVisible : !_isConfirmPasswordVisible,
+      obscureText: isPassword ? !_isPasswordVisible : !_isConfirmPasswordVisible,
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon),
+        prefixIcon: Icon(icon, color: Colors.deepPurple),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        filled: true,
+        fillColor: Colors.grey[200],
         suffixIcon: IconButton(
           icon: Icon(
             isPassword
                 ? (_isPasswordVisible ? Icons.visibility : Icons.visibility_off)
-                : (_isConfirmPasswordVisible
-                    ? Icons.visibility
-                    : Icons.visibility_off),
+                : (_isConfirmPasswordVisible ? Icons.visibility : Icons.visibility_off),
+            color: Colors.deepPurple,
           ),
           onPressed: () {
             setState(() {
@@ -110,9 +147,14 @@ class _RegistroState extends State<Registro> {
     return TextField(
       controller: _birthDateController,
       readOnly: true,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: "Fecha de Nacimiento",
-        prefixIcon: Icon(Icons.calendar_today),
+        prefixIcon: const Icon(Icons.calendar_today, color: Colors.deepPurple),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        filled: true,
+        fillColor: Colors.grey[200],
       ),
       onTap: () async {
         DateTime? pickedDate = await showDatePicker(
@@ -123,69 +165,42 @@ class _RegistroState extends State<Registro> {
         );
         if (pickedDate != null) {
           setState(() {
-            _birthDateController.text =
-                DateFormat('yyyy-MM-dd').format(pickedDate);
+            _birthDateController.text = DateFormat('yyyy-MM-dd').format(pickedDate);
           });
         }
       },
     );
   }
+Future<void> registerUser() async {
+  if (!_validateFields()) return;
 
-  Future<void> _registerUser() async {
-    if (!_validateFields()) return;
+  setState(() {
+    _isLoading = true;
+  });
 
-    setState(() {
-      _isLoading = true;
-    });
+  final registroService = RegistroService();
+  final error = await registroService.registrarUsuario(
+    nombre: _nombreController.text,
+    nombreUsuario: _nombreUsuarioController.text,
+    email: _correoController.text,
+    password: _passwordController.text,
+    fechanac: _birthDateController.text,
+  );
 
-    try {
-      final response = await http.post(
-        
-        Uri.parse("http://192.168.50.54:8080//plataforma/registro.php"),
-        //Uri.parse("http://10.0.2.2:8080/plataforma/registro.php"),
-        // Uri.parse("http://172.20.10.2:8080/plataforma/registro.php"),
-        //Uri.parse('http://127.0.0.1:8080/plataforma/registro.php'), // Cambia según tu configuración
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "nombre": _nombreController.text,
-          "nombreUsuario": _nombreUsuarioController.text,
-          "password": _passwordController.text,
-          "email": _correoController.text,
-          "fechanac": _birthDateController.text,
-        }),
-      );
+  setState(() {
+    _isLoading = false;
+  });
 
-      final responseData = jsonDecode(response.body);
-      if (response.statusCode == 200 &&
-          responseData['message'] == 'Registro exitoso') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Registro exitoso")),
-        );
+  if (error == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Registro exitoso. Revisa tu correo para verificar tu cuenta.")),
+    );
 
-        // Crear un mapa con los datos del usuario
-
-        // Redirigir a la pantalla Home pasando los datos del usuario
-        Navigator.pushReplacementNamed(
-          context,
-          '/home',
-          arguments: {
-            'nombre': _nombreController.text,
-            'nombreUsuario': _nombreUsuarioController.text,
-            'email': _correoController.text,
-            'fechanac': _birthDateController.text,
-          },
-        );
-      } else {
-        _showError(responseData['message']);
-      }
-    } catch (e) {
-      _showError("Error al conectar con el servidor");
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
+    Navigator.pushReplacementNamed(context, '/login');
+  } else {
+    _showError(error);
   }
+}
 
   bool _validateFields() {
     if (_nombreController.text.isEmpty ||
@@ -212,8 +227,7 @@ class _RegistroState extends State<Registro> {
   }
 
   bool _isValidEmail(String email) {
-    final emailRegex =
-        RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
     return emailRegex.hasMatch(email.trim());
   }
 
@@ -223,3 +237,51 @@ class _RegistroState extends State<Registro> {
     );
   }
 }
+
+  // Future<void> _registerUser() async {
+  //   if (!_validateFields()) return;
+
+  //   setState(() {
+  //     _isLoading = true;
+  //   });
+
+  //   try {
+  //     final response = await http.post(
+  //       Uri.parse("http://192.168.50.54:8080/plataforma/registro.php"),
+  //       headers: {"Content-Type": "application/json"},
+  //       body: jsonEncode({
+  //         "nombre": _nombreController.text,
+  //         "nombreUsuario": _nombreUsuarioController.text,
+  //         "password": _passwordController.text,
+  //         "email": _correoController.text,
+  //         "fechanac": _birthDateController.text,
+  //       }),
+  //     );
+
+  //     final responseData = jsonDecode(response.body);
+  //     if (response.statusCode == 200 && responseData['message'] == 'Registro exitoso') {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         const SnackBar(content: Text("Registro exitoso")),
+  //       );
+
+  //       Navigator.pushReplacementNamed(
+  //         context,
+  //         '/home',
+  //         arguments: {
+  //           'nombre': _nombreController.text,
+  //           'nombreUsuario': _nombreUsuarioController.text,
+  //           'email': _correoController.text,
+  //           'fechanac': _birthDateController.text,
+  //         },
+  //       );
+  //     } else {
+  //       _showError(responseData['message']);
+  //     }
+  //   } catch (e) {
+  //     _showError("Error al conectar con el servidor");
+  //   } finally {
+  //     setState(() {
+  //       _isLoading = false;
+  //     });
+  //   }
+  // }

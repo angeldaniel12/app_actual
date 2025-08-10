@@ -27,11 +27,11 @@ class _CrearCategoriaScreenState extends State<CrearCategoriaScreen> {
   Future<void> _fetchCategories() async {
     try {
       final response = await http.get(
-        //Uri.parse("http://10.0.2.2:8080/plataforma/categorias.php") //android
-        //Uri.parse("http://127.0.0.1:8080/plataforma/categorias.php"), //apple
-         Uri.parse("http://172.20.10.2:8080/plataforma/categorias.php"), 
-         //Uri.parse('http://172.20.10.2:8080/plataforma/categorias.php'),
-        //Uri.parse('http://192.168.50.54:8080/plataforma/categorias.php'),
+        //Uri.parse("http://000.00.00.00/plataforma/categorias.php") //android
+        //Uri.parse("http://000.00.00.00/plataforma/categorias.php"), //apple
+         Uri.parse("http://000.00.00.00/plataforma/categorias.php"), 
+         //Uri.parse('http://000.00.00.00/plataforma/categorias.php'),
+        //Uri.parse('http://000.00.00.00/plataforma/categorias.php'),
 
       );
 
@@ -71,12 +71,12 @@ class _CrearCategoriaScreenState extends State<CrearCategoriaScreen> {
 
     try {
       final response = await http.post(
-        //Uri.parse("http://10.0.2.2:8080/plataforma/categorias_crear.php"),
-        //Uri.parse("http://127.0.0.1:8080/plataforma/categorias_crear.php"), 
-        //  Uri.parse("http://172.20.10.2:8080/plataforma/categorias_crear.php"),
+        //Uri.parse("http://00.000.000.000.00/plataforma/categorias_crear.php"),
+        //Uri.parse("http://00.00.00.00/plataforma/categorias_crear.php"), 
+        //  Uri.parse("http://00.00.000.00/plataforma/categorias_crear.php"),
 
-        // Uri.parse("http://192.168.1.81:8080/plataforma/categorias_crear.php"),
-         Uri.parse("http://172.20.10.2:8080/plataforma/categorias_crear.php"),
+        // Uri.parse("http://00.00.00.00/plataforma/categorias_crear.php"),
+         Uri.parse("http://000.00.00.00/plataforma/categorias_crear.php"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"nameCategoria": nombreCategoria}),
       );

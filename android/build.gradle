@@ -1,18 +1,28 @@
-allprojects {
+
+
+// rootProject.buildDir = "../build"
+
+// subprojects {
+//     buildDir = "${rootProject.buildDir}/${project.name}"
+// }
+
+// subprojects {
+//     evaluationDependsOn(":app")
+// }
+
+// tasks.register("clean", Delete) {
+//     delete rootProject.buildDir
+// }
+pluginManagement {
     repositories {
         google()
         mavenCentral()
+        gradlePluginPortal()
     }
 }
 
-rootProject.buildDir = '../build'
-subprojects {
-    project.buildDir = "${rootProject.buildDir}/${project.name}"
-}
-subprojects {
-    project.evaluationDependsOn(':app')
+plugins {
+    id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
 }
 
-tasks.register("clean", Delete) {
-    delete rootProject.buildDir
-}
+include(":app")

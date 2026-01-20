@@ -298,18 +298,18 @@ packages:
     dependency: "direct dev"
     description:
       name: flutter_lints
-      sha256: "9e8c3858111da373efc5aa341de011d9bd23e2c5c5e0c62bccf32438e192d7b1"
+      sha256: "5398f14efa795ffb7a33e9b6a08798b26a180edac4ad7db3f231e40f82ce11e1"
       url: "https://pub.dev"
     source: hosted
-    version: "3.0.2"
+    version: "5.0.0"
   flutter_localization:
     dependency: "direct main"
     description:
       name: flutter_localization
-      sha256: "972eb337dcc27480e575accf9eadcdd80f52755ba05efcfdb585b869f29ad3d6"
+      sha256: "578a73455a0deffc4169ef9372ba0562a3e2cff563e5c524ea87bc96daa519c0"
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.3"
+    version: "0.3.3"
   flutter_localizations:
     dependency: transitive
     description: flutter
@@ -353,10 +353,10 @@ packages:
     dependency: "direct main"
     description:
       name: http
-      sha256: "2c11f3f94c687ee9bad77c171151672986360b2b001d109814ee7140b2cf261b"
+      sha256: bb2ce4590bc2667c96f318d68cac1b5a7987ec819351d32b1c987239a815e007
       url: "https://pub.dev"
     source: hosted
-    version: "1.4.0"
+    version: "1.5.0"
   http_parser:
     dependency: transitive
     description:
@@ -457,10 +457,10 @@ packages:
     dependency: transitive
     description:
       name: iris_method_channel
-      sha256: "99143ae77073ee8fd6c19d8f56ec59ba6c332000d8bea46bb9b6a89d83feca5c"
+      sha256: bfb5cfc6c6eae42da8cd1b35977a72d8b8881848a5dfc3d672e4760a907d11a0
       url: "https://pub.dev"
     source: hosted
-    version: "2.2.2"
+    version: "2.2.4"
   js:
     dependency: transitive
     description:
@@ -505,10 +505,10 @@ packages:
     dependency: transitive
     description:
       name: lints
-      sha256: cbf8d4b858bb0134ef3ef87841abdf8d63bfc255c266b7bf6b39daa1085c4290
+      sha256: "3315600f3fb3b135be672bf4a178c55f274bebe368325ae18462c89ac1e3b413"
       url: "https://pub.dev"
     source: hosted
-    version: "3.0.0"
+    version: "5.0.0"
   logging:
     dependency: transitive
     description:
@@ -633,10 +633,10 @@ packages:
     dependency: "direct main"
     description:
       name: permission_handler
-      sha256: "2d070d8684b68efb580a5997eb62f675e8a885ef0be6e754fb9ef489c177470f"
+      sha256: bc917da36261b00137bbc8896bf1482169cd76f866282368948f032c8c1caae1
       url: "https://pub.dev"
     source: hosted
-    version: "12.0.0+1"
+    version: "12.0.1"
   permission_handler_android:
     dependency: transitive
     description:
@@ -713,10 +713,10 @@ packages:
     dependency: transitive
     description:
       name: posix
-      sha256: f0d7856b6ca1887cfa6d1d394056a296ae33489db914e365e2044fdada449e62
+      sha256: "6323a5b0fa688b6a010df4905a56b00181479e6d10534cecfecede2aa55add61"
       url: "https://pub.dev"
     source: hosted
-    version: "6.0.2"
+    version: "6.0.3"
   rxdart:
     dependency: transitive
     description:
@@ -729,18 +729,18 @@ packages:
     dependency: "direct main"
     description:
       name: share_plus
-      sha256: b2961506569e28948d75ec346c28775bb111986bb69dc6a20754a457e3d97fa0
+      sha256: d7dc0630a923883c6328ca31b89aa682bacbf2f8304162d29f7c6aaff03a27a1
       url: "https://pub.dev"
     source: hosted
-    version: "11.0.0"
+    version: "11.1.0"
   share_plus_platform_interface:
     dependency: transitive
     description:
       name: share_plus_platform_interface
-      sha256: "1032d392bc5d2095a77447a805aa3f804d2ae6a4d5eef5e6ebb3bd94c1bc19ef"
+      sha256: "88023e53a13429bd65d8e85e11a9b484f49d4c190abbd96c7932b74d6927cc9a"
       url: "https://pub.dev"
     source: hosted
-    version: "6.0.0"
+    version: "6.1.0"
   shared_preferences:
     dependency: transitive
     description:
@@ -886,10 +886,10 @@ packages:
     dependency: transitive
     description:
       name: string_validator
-      sha256: a278d038104aa2df15d0e09c47cb39a49f907260732067d0034dc2f2e4e2ac94
+      sha256: "240f4c98027dfbe8639c8271ef18cc9de735b47067aa15a720cfed9576a512b1"
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.0"
+    version: "1.2.0"
   synchronized:
     dependency: transitive
     description:
@@ -1126,10 +1126,10 @@ packages:
     dependency: "direct main"
     description:
       name: youtube_player_flutter
-      sha256: "4d14aa47f9c84929b5400a87ade4dcfdab87a2ca2e0b18ecc2ef852b1440e123"
+      sha256: "924a4099b052119a42bbd9491be8891ab3c2e05074f3649ce73b596f3f440f19"
       url: "https://pub.dev"
     source: hosted
-    version: "9.1.1"
+    version: "9.1.2"
 sdks:
   dart: ">=3.5.0 <4.0.0"
   flutter: ">=3.24.0"
